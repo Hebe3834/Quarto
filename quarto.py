@@ -5,6 +5,7 @@
 # don't give piece that loses (pick)
 
 from termcolor import colored
+from solver import *
 
 class Quarto():
     """
@@ -39,9 +40,9 @@ class Quarto():
         x = int(coord[0])
         y = int(coord[1])
         if not (0 <= x < 4 and 0 <= y < 4 and len(coord) == 2):
-            print("COORDINATES MUST BE A LIST OF TWO INTS FROM 0 TO 4. PLEASE TRY AGAIN.")
+            print("COORDINATES MUST BE A LIST OF TWO INTS FROM 0 TO 3 INCLUSIVE. PLEASE TRY AGAIN.")
         elif not self.board[y][x] is None:
-            print("THIS BOX IS ALREADY TAKEN. PLEASE TRY AGAIN")
+            print("THIS BOX IS ALREADY TAKEN WITH " + str(self.board[y][x]) + "PLEASE TRY AGAIN")
         else:
             self.board[y][x] = piece
             # print(self)
@@ -107,7 +108,7 @@ class Quarto():
 
     def __str__(self):
         '''Returns the formatted board'''
-        hline = "\n# ----------------------- #\n"
+        hline = "\n# >---------------------< #\n"
         rows = []
         for i in range(4):
             rows.append("# " + self.row(i) + " #")
@@ -178,11 +179,23 @@ class Player():
         self.score = 0
         self.name = name
 
-    def pick(self, board):
-        pass
+    def pick(self, board, remaining_pieces, is_p1_turn):
+        print(board)
+        print("Pieces left: " + "  ".join((str(i) + ":" + str(t)) \
+                                        for i,t in enumerate(remaining_pieces)))
+        nextPiece_ind = (input("\n" + colored(self.name, ("red" if is_p1_turn else "green")) + \
+                            ": Please select a piece to give your opponent (index from list above): "))
+        while not (nextPiece_ind.isdigit()) or not (0 <= int(nextPiece_ind) < len(remaining_pieces)):
+            print("\nINDICES MUST BE AN INTEGER FROM 0 TO " + str(len(remaining_pieces) - 1) + ". TRY AGAIN")
+            nextPiece_ind = (input("\n" + colored(self.name, ("red" if is_p1_turn else "green")) + \
+                            ": Please select a piece to give your opponent (index from list above): "))
+        return remaining_pieces[int(nextPiece_ind)]
 
-    def play_turn(self, board, piece):
-        pass
+    def play_turn(self, board, piece, is_p1_turn):
+        '''Gathers player decision on where to play piece'''
+        print(board)
+        return input("\n" + colored(self.name, ("red" if is_p1_turn else "green")) + " is up with Piece " + str(piece) + ". Please enter coordinates x,y: ")
+
 
     def __str__(self):
         '''Prints info about the player's name and score'''
@@ -201,9 +214,18 @@ class GameManager():
     """
 
     def __init__(self, player1_name, player2_name):
-        """Starts the game with a board, two players"""
-        self.player1 = Player(player1_name)
-        self.player2 = Player(player2_name)
+        """
+        Starts the game with a board, two players
+        If a player's name starts with 'Solver' (ie 'Solver_Billy'), that player is replaced with a cpu
+        """
+        if player1_name[:6] == "Solver":
+            self.player1 = Solver(player1_name, True)
+        else:
+            self.player1 = Player(player1_name)
+        if player2_name[:6] == "Solver":
+            self.player2 = Solver(player2_name, False)
+        else:
+            self.player2 = Player(player2_name)        
         self.quarto = Quarto()
         self.p1_turn = True
 
@@ -215,47 +237,54 @@ class GameManager():
         '''
         print("Pieces left: " + "  ".join((str(i) + ":" + str(t)) \
                                         for i,t in enumerate(self.quarto.remaining_pieces)))
-        nextPiece_ind = int(input("\n" + colored(self.player1.name, "red") + " is up. Please select a piece to give your opponent (index from list above): "))
-        nextPiece = self.quarto.remaining_pieces[nextPiece_ind]
+        nextPiece = self.player1.pick(self.quarto, self.quarto.remaining_pieces, True) # player1 picks a piece to give payer2
         self.p1_turn = False
 
         while True:
-            print(self.quarto)
             if not self.p1_turn:    # Starts with player 2 because player one pics the first piece 
-                coords = input("\n" + colored(self.player1.name, "red") + " is up with Piece " + str(nextPiece) + ". Please enter coordinates x,y: ")
-                print("\n============================================================\n")
-                if self.quarto.play(nextPiece, coords.split(",")): # move successful; else runs this loop again on same player's turn
-                    self.p1_turn = True
-                    self.quarto.remaining_pieces.pop(nextPiece_ind)
-                    if self.quarto.checkWin(coords.split(",")):
-                        print("Congratulations! " + colored(self.player1.name, "red") + " has won the game.\n")
-                        self.player1.score += 1
-                        print(self)
-                        break
-                    print(self.quarto)
-                    print("Pieces left: " + " ".join(str(t) for t in self.quarto.remaining_pieces))
-                    nextPiece_ind = int(input("\n" + "Please select a piece to give your opponent (index from list above): "))
-                    nextPiece = self.quarto.remaining_pieces[nextPiece_ind]
+                # print(self.quarto)
+                coords = self.player2.play_turn(self.quarto, nextPiece, False)
+                print("\n============================================================")
+                while not self.quarto.play(nextPiece, coords.split(",")): # same player attempts to give a valid move until successful
+                    coords = self.player2.play_turn(self.quarto, nextPiece, False)
+                self.p1_turn = True # switch to player 1 turn
+                self.quarto.remaining_pieces.remove(nextPiece)
+                if self.quarto.checkWin(coords.split(",")):
+                    print("Congratulations! " + colored(self.player2.name, "green") + " has won the game.")
+                    self.player2.score += 1
+                    print(self)
+                    break
+                if len(self.quarto.remaining_pieces) == 0: # No pieces left; tie
+                    print("Game Over! Tie")
+                    
+                    print(self)
+                    self.reset_board() # reset board for new game; losing player goes first next round
+                    break
+                nextPiece = self.player2.pick(self.quarto, self.quarto.remaining_pieces, False)
             else:
-                coords = input("\n" + colored(self.player2.name, "green")  + " is up with Piece " + str(nextPiece) + ". Please enter coordinates x,y: ")
-                print("\n============================================================\n")
-                if self.quarto.play(nextPiece, coords.split(",")): # move successful
-                    self.p1_turn = False
-                    self.quarto.remaining_pieces.pop(nextPiece_ind)
-                    if self.quarto.checkWin(coords.split(",")):
-                        print("Congratulations! " + colored(self.player2.name, "green") + " has won the game.")
-                        self.player2.score += 1
-                        print(self)
-                        break
-                    print(self.quarto)
-                    print("Pieces left: " + " ".join(str(t) for t in self.quarto.remaining_pieces))
-                    nextPiece_ind = int(input("\n" + "Please select a piece to give your opponent (index from list above): "))
-                    nextPiece = self.quarto.remaining_pieces[nextPiece_ind]
-            if self.quarto.isBoardFull():
-                print(self.quarto)
-                print("Game Over! Tie")
-                self.reset_board() # reset board for new game; losing player goes first next round
-                break
+                # print(self.quarto)
+                coords = self.player1.play_turn(self.quarto, nextPiece, True)
+                print("\n============================================================")
+                while not self.quarto.play(nextPiece, coords.split(",")): # same player attempts to give a valid move until successful
+                    coords = self.player1.play_turn(self.quarto, nextPiece, False)
+                self.p1_turn = False # switch to player 2 turn
+                self.quarto.remaining_pieces.remove(nextPiece)
+                if self.quarto.checkWin(coords.split(",")):
+                    print("Congratulations! " + colored(self.player1.name, "red") + " has won the game.")
+                    self.player1.score += 1
+                    print(self)
+                    break
+                if len(self.quarto.remaining_pieces) == 0: # no pieces left; tie
+                    print("Game Over! Tie")
+                    print(self)
+                    self.reset_board() # reset board for new game; losing player goes first next round
+                    break
+                nextPiece = self.player1.pick(self.quarto, self.quarto.remaining_pieces, True)
+            # if self.quarto.isBoardFull() or len(self.quarto.remaining_pieces) == 0:
+            #     print(self.quarto)
+            #     print("Game Over! Tie")
+            #     self.reset_board() # reset board for new game; losing player goes first next round
+            #     break
 
     def reset_board(self):
         '''Changes the board to an empty board'''
@@ -263,7 +292,7 @@ class GameManager():
 
     def __str__(self):
         '''Prints all the info about the game, including the current board and info on each player'''
-        return str(self.quarto) + "\n\n" + str(self.player1) + "\n" + str(self.player2)
+        return str(self.quarto) + "\n\n" + colored(str(self.player1), 'red') + "\n" + colored(str(self.player2), 'green')
 
 
 
@@ -278,7 +307,16 @@ def main():
                    allows for new game after one has finished
     '''
 
-    print(colored("\n\n\n\n\nWelcome to Quarto!\n\n<insert rules>\n", 'yellow'))
+    print(colored("\n\n\n\n\nWelcome to Quarto!", 'grey', attrs=["bold"]))
+    print(colored("Fill up an entire row, column, or diagonal with a matching attribute to win.", 'grey'))
+    
+    print(colored('\nAttributes:', 'grey', attrs=["underline"]))
+    print(" - " + colored("Underline", 'grey', attrs=["underline"]) + colored(" or ", 'grey') + colored("Bold", 'grey', attrs=["bold"]))    
+    print(" - " + colored("Cyan", 'cyan') + colored(" or ", 'grey') + colored("Magenta", 'magenta'))
+    print(colored(" - [Square] or (Round)", 'grey'))
+    print(colored(" - Filled [#] (#)   or   Hollow [ ] ( )", 'grey'))
+
+    print(colored('\ny equals row (distance from top row)\nx equals column (distance from leftmost row)\n\n', 'grey'))
     p1_name = input(colored("Name of Player 1: ", "red"))
     p2_name = input(colored("Name of Player 2: ", "green"))
 
