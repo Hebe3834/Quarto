@@ -6,6 +6,7 @@
 
 from termcolor import colored
 from solver import *
+from copy import deepcopy
 
 class Quarto():
     """
@@ -17,18 +18,17 @@ class Quarto():
         self.board = []
         self.reset_board()
 
-
     def reset_board(self):
+        '''Replaces all the Pieces of the game and empties the board'''
         self.remaining_pieces = [Piece(a, b, c, d) for a in [True, False] for b in [True, False] for c in [True, False] for d in [True, False]]
         self.board =  [[None for i in range(4)] for j in range(4)]
-
 
     def row(self, r):
         '''Returns one row of the board, formatted for printing'''
         return " " + " | ".join([("   " if t is None else str(t)) \
                                 for t in self.board[r]]) + " "
 
-    def play(self, piece, coord):
+    def check_play(self, piece, coord):
         '''
         Attempts to place token in the position (coord[0], coord[1])
         If it is a valid move updates the board
@@ -42,18 +42,15 @@ class Quarto():
         if not (0 <= x < 4 and 0 <= y < 4 and len(coord) == 2):
             print("COORDINATES MUST BE A LIST OF TWO INTS FROM 0 TO 3 INCLUSIVE. PLEASE TRY AGAIN.")
         elif not self.board[y][x] is None:
-            print("THIS BOX IS ALREADY TAKEN WITH " + str(self.board[y][x]) + "PLEASE TRY AGAIN")
+            print("THIS BOX IS ALREADY TAKEN WITH " + str(self.board[y][x]) + ". PLEASE TRY AGAIN")
         else:
             self.board[y][x] = piece
             # print(self)
             return True
         return False
 
-
     def checkList(self, gen):
-        '''
-        Checks if the list generator contains one of the same characteristic
-        '''
+        '''Checks if the list generator contains one of the same characteristic'''
         lst = list(gen)
         key = lst[0]
         win = True
@@ -83,9 +80,7 @@ class Quarto():
         return False
 
     def checkWin(self, coord):
-        '''
-        Checks if the player has won by looking at elements vertically, horizontally, and diagonally
-        '''
+        '''Checks if the player has won by looking at elements vertically, horizontally, and diagonally'''
         x = int(coord[0])
         y = int(coord[1])
         if self.checkList(self.board[y][c] for c in range(4)): #row
@@ -105,6 +100,13 @@ class Quarto():
                 if j is None:
                     return False
         return True
+    
+    def clone(self):
+        '''Returns a copy of the current Quarto object'''
+        cp = Quarto()
+        cp.remaining_pieces = deepcopy(self.remaining_pieces)
+        cp.board = deepcopy(self.board)
+        return cp
 
     def __str__(self):
         '''Returns the formatted board'''
@@ -125,11 +127,8 @@ class Quarto():
 
 
 
-
 class Piece():
-    """
-    Represents one piece to be placed on the Quarto board
-    """
+    """Represents one piece to be placed on the Quarto board"""
     def __init__(self, size, color, shape, hollow):
         """
         Creates the game Piece and sets up its attributes
@@ -143,16 +142,17 @@ class Piece():
         self.shape = shape
         self.hollow = hollow
 
+    def clone(self):
+        '''Returns a copy of the current Quarto object'''
+        cp = Piece(self.size, self.color, self.shape, self.hollow)
+        return cp
+
     def __str__(self):
         '''Returns the piece as an ascii representation'''
         pic = "[]" if self.shape else "()"
         pic = pic[0] + ("#" if self.hollow else " ") + pic[1]
         pic1 = colored(pic, ("cyan" if self.color else "magenta"), attrs=[("underline" if self.size else "bold")])
         return pic1
-        # return ("t" if self.size else "s") + \
-        #         ("l" if self.color else "d") + \
-        #         ("r" if self.shape else "c") + \
-        #         ("h" if self.hollow else "f")
         
     def __repr__(self):
         '''Returns the piece as a string of characters'''
@@ -161,12 +161,7 @@ class Piece():
                 ("r" if self.shape else "c") + \
                 ("h" if self.hollow else "f")
         
-        
-        # """Returns information about the Piece's attributes"""
-        # return "Piece is " + ("tall" if self.size else "short") + ", " \
-        #                 + ("light" if self.color else "dark") + ", " \
-        #                 + ("rectangular" if self.shape else "circular") + ", " \
-        #                 + "and " + ("hollow" if self.hollow else "filled") 
+
 
 
 
@@ -196,12 +191,9 @@ class Player():
         print(board)
         return input("\n" + colored(self.name, ("red" if is_p1_turn else "green")) + " is up with Piece " + str(piece) + ". Please enter coordinates x,y: ")
 
-
     def __str__(self):
         '''Prints info about the player's name and score'''
         return "Player " + str(self.name) + " with " + str(self.score) + " point(s)."
-
-
 
 
 
@@ -212,20 +204,29 @@ class GameManager():
     The GameManager runs the main control loop of the Quarto game
     To play, create a new GameManager 'game' then run 'game.play_game()'
     """
-
     def __init__(self, player1_name, player2_name):
         """
         Starts the game with a board, two players
-        If a player's name starts with 'Solver' (ie 'Solver_Billy'), that player is replaced with a cpu
+        If a player's name starts with one of the 'Solver's (ie 'RandSolver_Billy'), that player is replaced with a cpu
         """
-        if player1_name[:6] == "Solver":
-            self.player1 = Solver(player1_name, True)
+        if player1_name[:10] == "RandSolver":
+            self.player1 = RandSolver(player1_name, True)
+        elif player1_name[:9] == "WinSolver":
+            self.player1 = WinSolver(player1_name, True)
+        elif player1_name[:12] == "LosentSolver":
+            self.player1 = LosentSolver(player1_name, True)
         else:
             self.player1 = Player(player1_name)
-        if player2_name[:6] == "Solver":
-            self.player2 = Solver(player2_name, False)
+        
+        if player2_name[:10] == "RandSolver":
+            self.player2 = RandSolver(player2_name, False)
+        elif player2_name[:9] == "WinSolver":
+            self.player2 = WinSolver(player2_name, True)
+        elif player2_name[:12] == "LosentSolver":
+            self.player2 = LosentSolver(player2_name, True)
         else:
-            self.player2 = Player(player2_name)        
+            self.player2 = Player(player2_name)  
+      
         self.quarto = Quarto()
         self.p1_turn = True
 
@@ -245,7 +246,7 @@ class GameManager():
                 # print(self.quarto)
                 coords = self.player2.play_turn(self.quarto, nextPiece, False)
                 print("\n============================================================")
-                while not self.quarto.play(nextPiece, coords.split(",")): # same player attempts to give a valid move until successful
+                while not self.quarto.check_play(nextPiece, coords.split(",")): # same player attempts to give a valid move until successful
                     coords = self.player2.play_turn(self.quarto, nextPiece, False)
                 self.p1_turn = True # switch to player 1 turn
                 self.quarto.remaining_pieces.remove(nextPiece)
@@ -265,7 +266,7 @@ class GameManager():
                 # print(self.quarto)
                 coords = self.player1.play_turn(self.quarto, nextPiece, True)
                 print("\n============================================================")
-                while not self.quarto.play(nextPiece, coords.split(",")): # same player attempts to give a valid move until successful
+                while not self.quarto.check_play(nextPiece, coords.split(",")): # same player attempts to give a valid move until successful
                     coords = self.player1.play_turn(self.quarto, nextPiece, False)
                 self.p1_turn = False # switch to player 2 turn
                 self.quarto.remaining_pieces.remove(nextPiece)
@@ -280,11 +281,6 @@ class GameManager():
                     self.reset_board() # reset board for new game; losing player goes first next round
                     break
                 nextPiece = self.player1.pick(self.quarto, self.quarto.remaining_pieces, True)
-            # if self.quarto.isBoardFull() or len(self.quarto.remaining_pieces) == 0:
-            #     print(self.quarto)
-            #     print("Game Over! Tie")
-            #     self.reset_board() # reset board for new game; losing player goes first next round
-            #     break
 
     def reset_board(self):
         '''Changes the board to an empty board'''
@@ -293,8 +289,6 @@ class GameManager():
     def __str__(self):
         '''Prints all the info about the game, including the current board and info on each player'''
         return str(self.quarto) + "\n\n" + colored(str(self.player1), 'red') + "\n" + colored(str(self.player2), 'green')
-
-
 
 
 
